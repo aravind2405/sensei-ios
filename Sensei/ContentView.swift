@@ -138,7 +138,6 @@ struct ContentView: View {
     @State private var inputText = ""
     @State private var isThinking = false
 
-    // Scroll behavior state
     @State private var viewportHeight: CGFloat = 0
     @State private var bottomAnchorY: CGFloat = 0
     @State private var isNearBottom = true
@@ -146,7 +145,7 @@ struct ContentView: View {
 
     @FocusState private var inputFocused: Bool
 
-    let backendURL = "https://your-railway-url.up.railway.app/chat"
+    let backendURL = "https://worker-production-3a1c.up.railway.app/chat"
 
     var body: some View {
         ZStack {
@@ -382,37 +381,78 @@ struct ContentView: View {
         messages.append(Message(text: text, isUser: true))
         isThinking = true
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            isThinking = false
-            pendingAutoScroll = true
-            messages.append(
-                Message(
-                    text: "Connect the Railway backend to bring SENSEI to life here.",
-                    isUser: false
-                )
-            )
+        Task {
+            await sendToBackend(text: text)
         }
-
-        // Uncomment when Railway URL is ready:
-        // Task { await sendToBackend(text: text) }
     }
 
     func sendToBackend(text: String) async {
-        guard let url = URL(string: backendURL) else { return }
+        guard let url = URL(string: backendURL) else {
+            await MainActor.run {
+                isThinking = false
+                messages.append(
+                    Message(
+                        text: "The backend URL is invalid.",
+                        isUser: false
+                    )
+                )
+            }
+            return
+        }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(withJSONObject: ["message": text])
 
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                await MainActor.run {
+                    isThinking = false
+                    messages.append(
+                        Message(
+                            text: "No valid response from SENSEI.",
+                            isUser: false
+                        )
+                    )
+                }
+                return
+            }
+
+            guard (200...299).contains(httpResponse.statusCode) else {
+                let bodyText = String(data: data, encoding: .utf8) ?? "Unknown server error."
+                await MainActor.run {
+                    isThinking = false
+                    messages.append(
+                        Message(
+                            text: "SENSEI returned an error (\(httpResponse.statusCode)): \(bodyText)",
+                            isUser: false
+                        )
+                    )
+                }
+                return
+            }
+
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let reply = json["reply"] as? String {
                 await MainActor.run {
                     isThinking = false
                     pendingAutoScroll = true
                     messages.append(Message(text: reply, isUser: false))
+                }
+            } else {
+                let bodyText = String(data: data, encoding: .utf8) ?? "Unreadable response."
+                await MainActor.run {
+                    isThinking = false
+                    messages.append(
+                        Message(
+                            text: "SENSEI replied, but the response format was unexpected: \(bodyText)",
+                            isUser: false
+                        )
+                    )
                 }
             }
         } catch {
