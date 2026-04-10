@@ -3,6 +3,7 @@ import SwiftData
 
 @main
 struct SenseiApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             StudySession.self,

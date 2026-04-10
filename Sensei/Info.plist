@@ -9,5 +9,9 @@
 	</array>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>SENSEI reads your calendar to know your schedule during morning check-ins.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>
