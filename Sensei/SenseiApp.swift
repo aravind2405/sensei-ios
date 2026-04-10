@@ -23,7 +23,7 @@ struct SenseiApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootTabView()
+            AppView()
         }
         .modelContainer(sharedModelContainer)
     }

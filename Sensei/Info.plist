@@ -7,5 +7,7 @@
 		<string>CormorantGaramond-VariableFont_wght.ttf</string>
 		<string>CormorantGaramond-Italic-VariableFont_wght.ttf</string>
 	</array>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>SENSEI reads your calendar to know your schedule during morning check-ins.</string>
 </dict>
 </plist>

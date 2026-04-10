@@ -39,35 +39,22 @@ struct DarkBackground: View {
     }
 }
 
-// MARK: - Root Tab View
+// MARK: - App View (no tab bar — state-based navigation)
 
-struct RootTabView: View {
-    @State private var selectedTab = 0
-
-    init() {
-        let appearance = UITabBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor(Color(hex: "#050301"))
-        let normal: [NSAttributedString.Key: Any]   = [.foregroundColor: UIColor(Color(hex: "#4a3020"))]
-        let selected: [NSAttributedString.Key: Any]  = [.foregroundColor: UIColor(Color(hex: "#c8956a"))]
-        appearance.stackedLayoutAppearance.normal.titleTextAttributes   = normal
-        appearance.stackedLayoutAppearance.normal.iconColor             = UIColor(Color(hex: "#4a3020"))
-        appearance.stackedLayoutAppearance.selected.titleTextAttributes = selected
-        appearance.stackedLayoutAppearance.selected.iconColor           = UIColor(Color(hex: "#c8956a"))
-        UITabBar.appearance().standardAppearance    = appearance
-        UITabBar.appearance().scrollEdgeAppearance  = appearance
-    }
+struct AppView: View {
+    @State private var showLogbook = false
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            ChatView()
-                .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
-                .tag(0)
-            LogbookView()
-                .tabItem { Label("Logbook", systemImage: "book.closed") }
-                .tag(1)
+        ZStack {
+            if showLogbook {
+                LogbookView(onBack: { showLogbook = false })
+                    .transition(.move(edge: .trailing))
+            } else {
+                ChatView(onLogbook: { showLogbook = true })
+                    .transition(.move(edge: .trailing))
+            }
         }
-        .tint(Color(hex: "#c8956a"))
+        .animation(.easeInOut(duration: 0.28), value: showLogbook)
     }
 }
 
@@ -167,7 +154,8 @@ struct MessageBubble: View {
                 .font(.custom("Cormorant Garamond", size: 18))
                 .fontWeight(.light)
                 .italic(message.isUser)
-                .foregroundColor(message.isUser ? Color(hex: "#f3dcc3") : Color(hex: "#e2ba91"))
+                // Contrast-bumped: SENSEI #f2cc90, user #f8e4cc
+                .foregroundColor(message.isUser ? Color(hex: "#f8e4cc") : Color(hex: "#f2cc90"))
                 .lineSpacing(5)
                 .multilineTextAlignment(message.isUser ? .trailing : .leading)
                 .frame(maxWidth: 255, alignment: message.isUser ? .trailing : .leading)
@@ -188,16 +176,35 @@ struct TimeDivider: View {
             Rectangle().fill(Color(hex: "#23160d").opacity(0.55)).frame(height: 0.5)
             Text(label)
                 .font(.custom("Cormorant Garamond", size: 11)).italic()
-                .foregroundColor(Color(hex: "#8d6748")).kerning(2)
+                .foregroundColor(Color(hex: "#b8906a")).kerning(2) // brighter
             Rectangle().fill(Color(hex: "#23160d").opacity(0.55)).frame(height: 0.5)
         }
         .padding(.vertical, 8)
     }
 }
 
+// MARK: - Nav Arrow Button
+
+private struct NavArrow: View {
+    let systemName: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 15, weight: .light))
+                .foregroundColor(Color(hex: "#c8956a").opacity(0.75))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+    }
+}
+
 // MARK: - Chat View
 
 struct ChatView: View {
+    let onLogbook: () -> Void
+
     @Environment(\.modelContext) private var modelContext
     @StateObject private var calendar = CalendarManager()
     @AppStorage("senseiSessionId") private var sessionId = UUID().uuidString
@@ -205,11 +212,11 @@ struct ChatView: View {
     @State private var messages: [Message] = [
         Message(text: "You are here. That is the first step. Now tell me — what did you actually do today?", isUser: false)
     ]
-    @State private var inputText      = ""
-    @State private var isThinking     = false
+    @State private var inputText         = ""
+    @State private var isThinking        = false
     @State private var viewportHeight: CGFloat = 0
-    @State private var bottomAnchorY:  CGFloat = 0
-    @State private var isNearBottom   = true
+    @State private var bottomAnchorY:   CGFloat = 0
+    @State private var isNearBottom      = true
     @State private var pendingAutoScroll = true
     @FocusState private var inputFocused: Bool
 
@@ -219,7 +226,15 @@ struct ChatView: View {
         ZStack {
             DarkBackground()
             VStack(spacing: 0) {
-                PresenceGlow().frame(height: 62).padding(.top, 12).padding(.bottom, 4)
+                // Top row: → arrow in top-right, nothing on left
+                HStack {
+                    Spacer()
+                    NavArrow(systemName: "arrow.right", action: onLogbook)
+                        .padding(.trailing, 8)
+                }
+                .padding(.top, 4)
+
+                PresenceGlow().frame(height: 56).padding(.bottom, 4)
                 chatArea.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -294,7 +309,7 @@ struct ChatView: View {
                 TextField("", text: $inputText,
                     prompt: Text("speak...")
                         .font(.system(size: 17, weight: .regular, design: .serif))
-                        .foregroundColor(Color(hex: "#8a6546")),
+                        .foregroundColor(Color(hex: "#b08860")),  // brighter placeholder
                     axis: .vertical
                 )
                 .font(.system(size: 17, weight: .regular, design: .serif))
@@ -377,8 +392,8 @@ struct ChatView: View {
                 isThinking = false
                 pendingAutoScroll = true
                 messages.append(Message(text: apiResponse.reply, isUser: false))
-                context.insert(ConversationHistory(role: "user",      content: text,               sessionId: sessionId))
-                context.insert(ConversationHistory(role: "assistant", content: apiResponse.reply,  sessionId: sessionId))
+                context.insert(ConversationHistory(role: "user",      content: text,              sessionId: sessionId))
+                context.insert(ConversationHistory(role: "assistant", content: apiResponse.reply, sessionId: sessionId))
                 for entry in apiResponse.logEntries { persistLogEntry(entry, context: context) }
             }
         } catch {
@@ -403,6 +418,8 @@ struct ChatView: View {
 // MARK: - Logbook View
 
 struct LogbookView: View {
+    let onBack: () -> Void
+
     @Query(sort: \ProgressLog.date,      order: .reverse) private var progressLogs:  [ProgressLog]
     @Query(sort: \Commitment.createdAt,  order: .reverse) private var commitments:   [Commitment]
     @Query(sort: \CareerEntry.date,      order: .reverse) private var careerEntries: [CareerEntry]
@@ -412,9 +429,17 @@ struct LogbookView: View {
         ZStack {
             DarkBackground()
             VStack(spacing: 0) {
-                logbookHeader
+                // Top row: ← arrow in top-left, no label
+                HStack {
+                    NavArrow(systemName: "arrow.left", action: onBack)
+                        .padding(.leading, 8)
+                    Spacer()
+                }
+                .padding(.top, 4)
+
                 summaryBar
                 Rectangle().fill(Color(hex: "#1a100a").opacity(0.7)).frame(height: 0.5)
+
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
                         LogbookSection(title: "PROGRESS", isEmpty: progressLogs.isEmpty,
@@ -439,20 +464,6 @@ struct LogbookView: View {
             }
         }
         .preferredColorScheme(.dark)
-    }
-
-    // MARK: Header
-
-    private var logbookHeader: some View {
-        VStack(spacing: 0) {
-            Text("Logbook")
-                .font(.custom("Cormorant Garamond", size: 30))
-                .fontWeight(.light).italic()
-                .foregroundColor(Color(hex: "#e2ba91"))
-                .padding(.top, 16).padding(.bottom, 12)
-            Rectangle().fill(Color(hex: "#1a100a").opacity(0.7)).frame(height: 0.5)
-                .padding(.horizontal, 24)
-        }
     }
 
     // MARK: Pinned summary bar
@@ -509,10 +520,10 @@ private struct SummaryCell: View {
         VStack(spacing: 3) {
             Text(value)
                 .font(.custom("Cormorant Garamond", size: 26)).fontWeight(.light)
-                .foregroundColor(Color(hex: "#e2ba91"))
+                .foregroundColor(Color(hex: "#f2cc90"))   // brighter
             Text(label)
                 .font(.custom("Cormorant Garamond", size: 11)).italic()
-                .foregroundColor(Color(hex: "#6a4530")).kerning(1.5)
+                .foregroundColor(Color(hex: "#a07848")).kerning(1.5)  // brighter
         }
         .frame(maxWidth: .infinity)
     }
@@ -531,7 +542,7 @@ private struct LogbookSection<Content: View>: View {
             HStack {
                 Text(title)
                     .font(.custom("Cormorant Garamond", size: 10)).italic()
-                    .foregroundColor(Color(hex: "#5a3d28")).kerning(3)
+                    .foregroundColor(Color(hex: "#a07848")).kerning(3)  // brighter
                 Rectangle().fill(Color(hex: "#1e1008").opacity(0.7)).frame(height: 0.5)
             }
             .padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 12)
@@ -539,7 +550,7 @@ private struct LogbookSection<Content: View>: View {
             if isEmpty {
                 Text(emptyText)
                     .font(.custom("Cormorant Garamond", size: 14)).italic()
-                    .foregroundColor(Color(hex: "#3d2818"))
+                    .foregroundColor(Color(hex: "#7a5840"))  // brighter
                     .padding(.horizontal, 24).padding(.bottom, 8)
             } else {
                 content()
@@ -563,15 +574,15 @@ private struct ProgressRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(log.action)
                     .font(.custom("Cormorant Garamond", size: 16)).fontWeight(.light)
-                    .foregroundColor(Color(hex: "#d4a878")).lineLimit(2)
+                    .foregroundColor(Color(hex: "#eccc90")).lineLimit(2)  // brighter
                 HStack(spacing: 6) {
                     Text(log.category.uppercased())
                         .font(.custom("Cormorant Garamond", size: 10)).italic()
-                        .foregroundColor(Color(hex: "#5a3d28")).kerning(1.5)
-                    Text("·").foregroundColor(Color(hex: "#3a2318"))
+                        .foregroundColor(Color(hex: "#a07848")).kerning(1.5)  // brighter
+                    Text("·").foregroundColor(Color(hex: "#6a4a30"))
                     Text(shortDate(log.date))
                         .font(.custom("Cormorant Garamond", size: 11)).italic()
-                        .foregroundColor(Color(hex: "#4a3020"))
+                        .foregroundColor(Color(hex: "#806040"))  // brighter
                 }
             }
             Spacer()
@@ -600,7 +611,7 @@ private struct CommitmentRow: View {
         switch commitment.met {
         case "Yes": return Color(hex: "#7fba6a")
         case "No":  return Color(hex: "#ba6a6a")
-        default:    return Color(hex: "#5a3d28")
+        default:    return Color(hex: "#a07848")  // brighter neutral
         }
     }
 
@@ -614,10 +625,10 @@ private struct CommitmentRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(commitment.commitmentMade)
                     .font(.custom("Cormorant Garamond", size: 16)).fontWeight(.light)
-                    .foregroundColor(Color(hex: "#d4a878")).lineLimit(3)
+                    .foregroundColor(Color(hex: "#eccc90")).lineLimit(3)  // brighter
                 Text("Week \(commitment.week)")
                     .font(.custom("Cormorant Garamond", size: 11)).italic()
-                    .foregroundColor(Color(hex: "#4a3020"))
+                    .foregroundColor(Color(hex: "#806040"))  // brighter
             }
             Spacer()
         }
@@ -639,16 +650,16 @@ private struct CareerRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.name)
                     .font(.custom("Cormorant Garamond", size: 16)).fontWeight(.light)
-                    .foregroundColor(Color(hex: "#d4a878")).lineLimit(2)
+                    .foregroundColor(Color(hex: "#eccc90")).lineLimit(2)  // brighter
                 HStack(spacing: 6) {
                     Text(entry.eventType.uppercased())
                         .font(.custom("Cormorant Garamond", size: 10)).italic()
-                        .foregroundColor(Color(hex: "#5a3d28")).kerning(1.5)
+                        .foregroundColor(Color(hex: "#a07848")).kerning(1.5)  // brighter
                     if let outcome = entry.outcome, !outcome.isEmpty {
-                        Text("·").foregroundColor(Color(hex: "#3a2318"))
+                        Text("·").foregroundColor(Color(hex: "#6a4a30"))
                         Text(outcome)
                             .font(.custom("Cormorant Garamond", size: 12)).italic()
-                            .foregroundColor(Color(hex: "#7a5538")).lineLimit(1)
+                            .foregroundColor(Color(hex: "#9a7558")).lineLimit(1)  // brighter
                     }
                 }
             }
@@ -675,7 +686,6 @@ private struct PatternRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            // Left accent bar
             Rectangle()
                 .fill(Color(hex: "#2a1a0e"))
                 .frame(width: 1)
@@ -684,7 +694,7 @@ private struct PatternRow: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Week \(pattern.week)")
                     .font(.custom("Cormorant Garamond", size: 13)).italic()
-                    .foregroundColor(Color(hex: "#5a3d28")).kerning(1)
+                    .foregroundColor(Color(hex: "#a07848")).kerning(1)  // brighter
 
                 if let p = pattern.patternsNoticed, !p.isEmpty {
                     PatternLine(label: "Noticed", text: p)
@@ -697,9 +707,7 @@ private struct PatternRow: View {
                 }
             }
         }
-        .padding(.leading, 24)
-        .padding(.trailing, 24)
-        .padding(.vertical, 12)
+        .padding(.leading, 24).padding(.trailing, 24).padding(.vertical, 12)
     }
 }
 
@@ -710,14 +718,14 @@ private struct PatternLine: View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label.uppercased())
                 .font(.custom("Cormorant Garamond", size: 9)).italic()
-                .foregroundColor(Color(hex: "#4a3020")).kerning(2)
+                .foregroundColor(Color(hex: "#806040")).kerning(2)  // brighter
             Text(text)
                 .font(.custom("Cormorant Garamond", size: 15)).fontWeight(.light)
-                .foregroundColor(Color(hex: "#c8a070")).lineLimit(5)
+                .foregroundColor(Color(hex: "#e8c080")).lineLimit(5)  // brighter
         }
     }
 }
 
 // MARK: - Preview
 
-#Preview { RootTabView() }
+#Preview { AppView() }
