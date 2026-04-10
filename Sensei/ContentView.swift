@@ -438,7 +438,6 @@ struct LogbookView: View {
                 .padding(.top, 4)
 
                 summaryBar
-                Rectangle().fill(Color(hex: "#1a100a").opacity(0.7)).frame(height: 0.5)
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
@@ -469,13 +468,16 @@ struct LogbookView: View {
     // MARK: Pinned summary bar
 
     private var summaryBar: some View {
-        HStack(spacing: 0) {
-            SummaryCell(value: "\(weeklyPoints)", label: "pts · week")
-            SummaryCell(value: "$\(walletBalance)", label: "wallet")
-            SummaryCell(value: "\(streakDays)", label: "day streak")
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                SummaryCell(value: "\(weeklyPoints)", label: "pts · week")
+                SummaryCell(value: "$\(walletBalance)", label: "wallet")
+                SummaryCell(value: "\(streakDays)", label: "day streak")
+            }
+            .padding(.vertical, 12)
+            .background(Color(hex: "#060301").opacity(0.95))
+            Rectangle().fill(Color(hex: "#1a100a").opacity(0.7)).frame(height: 0.5)
         }
-        .padding(.vertical, 8)
-        .background(Color(hex: "#060301").opacity(0.95))
     }
 
     // MARK: Computed stats
@@ -515,13 +517,13 @@ private struct SummaryCell: View {
     let value: String
     let label: String
     var body: some View {
-        VStack(spacing: 1) {
+        VStack(spacing: 2) {
             Text(value)
-                .font(.custom("Cormorant Garamond", size: 19)).fontWeight(.light)
+                .font(.custom("Cormorant Garamond", size: 28)).fontWeight(.light)
                 .foregroundColor(Color(hex: "#f2cc90"))
             Text(label)
-                .font(.custom("Cormorant Garamond", size: 10)).italic()
-                .foregroundColor(Color(hex: "#a07848")).kerning(1.2)
+                .font(.custom("Cormorant Garamond", size: 11)).italic()
+                .foregroundColor(Color(hex: "#a07848")).kerning(1.5)
         }
         .frame(maxWidth: .infinity)
     }
