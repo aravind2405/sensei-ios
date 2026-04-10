@@ -471,12 +471,10 @@ struct LogbookView: View {
     private var summaryBar: some View {
         HStack(spacing: 0) {
             SummaryCell(value: "\(weeklyPoints)", label: "pts · week")
-            Rectangle().fill(Color(hex: "#2a1a0e").opacity(0.7)).frame(width: 0.5).padding(.vertical, 10)
             SummaryCell(value: "$\(walletBalance)", label: "wallet")
-            Rectangle().fill(Color(hex: "#2a1a0e").opacity(0.7)).frame(width: 0.5).padding(.vertical, 10)
             SummaryCell(value: "\(streakDays)", label: "day streak")
         }
-        .padding(.vertical, 14)
+        .padding(.vertical, 8)
         .background(Color(hex: "#060301").opacity(0.95))
     }
 
@@ -517,13 +515,13 @@ private struct SummaryCell: View {
     let value: String
     let label: String
     var body: some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 1) {
             Text(value)
-                .font(.custom("Cormorant Garamond", size: 26)).fontWeight(.light)
-                .foregroundColor(Color(hex: "#f2cc90"))   // brighter
+                .font(.custom("Cormorant Garamond", size: 19)).fontWeight(.light)
+                .foregroundColor(Color(hex: "#f2cc90"))
             Text(label)
-                .font(.custom("Cormorant Garamond", size: 11)).italic()
-                .foregroundColor(Color(hex: "#a07848")).kerning(1.5)  // brighter
+                .font(.custom("Cormorant Garamond", size: 10)).italic()
+                .foregroundColor(Color(hex: "#a07848")).kerning(1.2)
         }
         .frame(maxWidth: .infinity)
     }
