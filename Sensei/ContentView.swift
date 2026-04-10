@@ -95,8 +95,46 @@ class CalendarManager: ObservableObject {
         let timeStr = timeFmt.string(from: now)
 
         let weekNum = cal.component(.weekOfYear, from: now)
+        let hour    = cal.component(.hour,        from: now)
 
-        var ctx = "[Context: \(dateStr) · \(timeStr) · Week \(weekNum)"
+        // Time-of-day label
+        let timeOfDay: String
+        switch hour {
+        case 6..<12:  timeOfDay = "morning"
+        case 12..<18: timeOfDay = "afternoon"
+        case 18..<22: timeOfDay = "evening"
+        default:      timeOfDay = "night"
+        }
+
+        // Time remaining until midnight (Sydney)
+        let tomorrow      = cal.startOfDay(for: cal.date(byAdding: .day, value: 1, to: now)!)
+        let secondsLeft   = max(0, Int(tomorrow.timeIntervalSince(now)))
+        let hoursLeft     = secondsLeft / 3600
+        let minsLeft      = (secondsLeft % 3600) / 60
+
+        // Build the time-awareness segment
+        let timeAwareness: String
+        if hour >= 22 {
+            // Late night: collapse into a single note
+            if hoursLeft == 0 {
+                timeAwareness = "late night — tomorrow starts in \(minsLeft) mins"
+            } else {
+                let minPart = minsLeft > 0 ? " \(minsLeft) mins" : ""
+                timeAwareness = "late night — tomorrow starts in \(hoursLeft) hrs\(minPart)"
+            }
+        } else {
+            let timeLeft: String
+            if secondsLeft < 3600 {
+                timeLeft = "\(minsLeft) mins left in day"
+            } else if minsLeft == 0 {
+                timeLeft = "\(hoursLeft) hrs left in day"
+            } else {
+                timeLeft = "\(hoursLeft) hrs \(minsLeft) mins left in day"
+            }
+            timeAwareness = "\(timeOfDay) · \(timeLeft)"
+        }
+
+        var ctx = "[Context: \(dateStr) · \(timeStr) · Week \(weekNum) · \(timeAwareness)"
 
         if authorized {
             let windowStart = cal.date(byAdding: .day, value: -7,  to: now)!
