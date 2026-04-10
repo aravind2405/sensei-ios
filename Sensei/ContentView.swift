@@ -64,6 +64,8 @@ class CalendarManager: ObservableObject {
     private let store = EKEventStore()
     @Published var authorized = false
 
+    private let sydney = TimeZone(identifier: "Australia/Sydney")!
+
     func requestAccess() {
         if #available(iOS 17.0, *) {
             store.requestFullAccessToEvents { granted, _ in
@@ -76,17 +78,63 @@ class CalendarManager: ObservableObject {
         }
     }
 
-    func todayEvents() -> String {
-        guard authorized else { return "" }
-        let start = Calendar.current.startOfDay(for: Date())
-        let end   = Calendar.current.date(byAdding: .day, value: 1, to: start)!
-        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
-        let events = store.events(matching: predicate)
-        if events.isEmpty { return "No events scheduled today." }
-        let fmt = DateFormatter(); fmt.dateFormat = "h:mm a"
-        return events
-            .map { "\($0.title ?? "Untitled") — \(fmt.string(from: $0.startDate)) to \(fmt.string(from: $0.endDate))" }
-            .joined(separator: ", ")
+    /// Builds the full context string injected into every /chat request.
+    func contextString() -> String {
+        var cal = Calendar.current
+        cal.timeZone = sydney
+        let now = Date()
+
+        let dateFmt = DateFormatter()
+        dateFmt.timeZone = sydney
+        dateFmt.dateFormat = "EEEE d MMM yyyy"
+        let dateStr = dateFmt.string(from: now)
+
+        let timeFmt = DateFormatter()
+        timeFmt.timeZone = sydney
+        timeFmt.dateFormat = "h:mm a zzz"
+        let timeStr = timeFmt.string(from: now)
+
+        let weekNum = cal.component(.weekOfYear, from: now)
+
+        var ctx = "[Context: \(dateStr) · \(timeStr) · Week \(weekNum)"
+
+        if authorized {
+            let windowStart = cal.date(byAdding: .day, value: -7,  to: now)!
+            let windowEnd   = cal.date(byAdding: .day, value:  30, to: now)!
+            let predicate   = store.predicateForEvents(withStart: windowStart, end: windowEnd, calendars: nil)
+            let events      = store.events(matching: predicate)
+
+            if events.isEmpty {
+                ctx += " · Calendar: No events"
+            } else {
+                let evtFmt = DateFormatter()
+                evtFmt.timeZone = sydney
+                evtFmt.dateFormat = "d MMM h:mm a"
+                let eventList = events.map { evt -> String in
+                    let s = evtFmt.string(from: evt.startDate)
+                    let e = evtFmt.string(from: evt.endDate)
+                    return "\(evt.title ?? "Untitled") (\(s)–\(e))"
+                }.joined(separator: "; ")
+                ctx += " · Calendar: \(eventList)"
+            }
+        } else {
+            ctx += " · Calendar: not authorised"
+        }
+
+        ctx += "]"
+        return ctx
+    }
+
+    /// Creates an EKEvent on the user's default calendar.
+    func createEvent(title: String, start: Date, end: Date, notes: String?) {
+        guard authorized else { return }
+        let event = EKEvent(eventStore: store)
+        event.title    = title
+        event.startDate = start
+        event.endDate   = end
+        event.notes    = notes
+        event.calendar = store.defaultCalendarForNewEvents
+        try? store.save(event, span: .thisEvent)
     }
 }
 
@@ -370,9 +418,8 @@ struct ChatView: View {
     func sendToBackend(text: String, context: ModelContext, sessionId: String) async {
         guard let url = URL(string: backendURL) else { await showError("Invalid backend URL."); return }
 
-        let calendarContext = calendar.authorized ? calendar.todayEvents() : nil
-        var body: [String: Any] = ["message": text, "session_id": sessionId]
-        if let ctx = calendarContext, !ctx.isEmpty { body["context"] = ctx }
+        let calendarContext = calendar.contextString()
+        var body: [String: Any] = ["message": text, "session_id": sessionId, "context": calendarContext]
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -394,7 +441,22 @@ struct ChatView: View {
                 messages.append(Message(text: apiResponse.reply, isUser: false))
                 context.insert(ConversationHistory(role: "user",      content: text,              sessionId: sessionId))
                 context.insert(ConversationHistory(role: "assistant", content: apiResponse.reply, sessionId: sessionId))
-                for entry in apiResponse.logEntries { persistLogEntry(entry, context: context) }
+                for entry in apiResponse.logEntries {
+                    persistLogEntry(entry, context: context)
+                    // Calendar event creation — backend signals intent, iOS acts on it
+                    if entry.table == "calendar_event", let title = entry.title,
+                       let startStr = entry.startDatetime {
+                        let iso = ISO8601DateFormatter()
+                        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                        let isoSimple = ISO8601DateFormatter()
+                        if let startDate = iso.date(from: startStr) ?? isoSimple.date(from: startStr) {
+                            let endDate = entry.endDatetime
+                                .flatMap { iso.date(from: $0) ?? isoSimple.date(from: $0) }
+                                ?? startDate.addingTimeInterval(3600)
+                            calendar.createEvent(title: title, start: startDate, end: endDate, notes: entry.notes)
+                        }
+                    }
+                }
             }
         } catch {
             await showError("Could not reach SENSEI. Check your connection.")
