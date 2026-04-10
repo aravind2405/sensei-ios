@@ -1,10 +1,3 @@
-//
-//  SenseiApp.swift
-//  Sensei
-//
-//  Created by Aravind Danassegarane on 27/3/2026.
-//
-
 import SwiftUI
 import SwiftData
 
@@ -12,12 +5,17 @@ import SwiftData
 struct SenseiApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            StudySession.self,
+            ProgressLog.self,
+            Commitment.self,
+            PatternJournal.self,
+            SenseiProject.self,
+            CareerEntry.self,
+            ConversationHistory.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            return try ModelContainer(for: schema, configurations: [config])
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
@@ -25,7 +23,7 @@ struct SenseiApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootTabView()
         }
         .modelContainer(sharedModelContainer)
     }
