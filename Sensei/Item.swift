@@ -181,6 +181,11 @@ struct RawLogEntry: Codable {
     let careerType: String?
     let outcome: String?
 
+    // calendar_event input fields
+    let title: String?
+    let startDatetime: String?
+    let endDatetime: String?
+
     enum CodingKeys: String, CodingKey {
         case table, action, points, category, id, met
         case created, updated, notes
@@ -196,6 +201,9 @@ struct RawLogEntry: Codable {
         case githubLink = "github_link"
         case careerType = "type"
         case outcome
+        case title
+        case startDatetime = "start_datetime"
+        case endDatetime = "end_datetime"
     }
 }
 
