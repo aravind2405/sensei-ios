@@ -49,12 +49,32 @@ struct AppView: View {
             if showLogbook {
                 LogbookView(onBack: { showLogbook = false })
                     .transition(.move(edge: .trailing))
+                    .gesture(swipeRight { showLogbook = false })
             } else {
                 ChatView(onLogbook: { showLogbook = true })
                     .transition(.move(edge: .trailing))
+                    .gesture(swipeLeft { showLogbook = true })
             }
         }
         .animation(.easeInOut(duration: 0.28), value: showLogbook)
+    }
+
+    private func swipeLeft(action: @escaping () -> Void) -> some Gesture {
+        DragGesture(minimumDistance: 50, coordinateSpace: .local)
+            .onEnded { v in
+                if v.translation.width < -50 && abs(v.translation.height) < abs(v.translation.width) {
+                    action()
+                }
+            }
+    }
+
+    private func swipeRight(action: @escaping () -> Void) -> some Gesture {
+        DragGesture(minimumDistance: 50, coordinateSpace: .local)
+            .onEnded { v in
+                if v.translation.width > 50 && abs(v.translation.height) < abs(v.translation.width) {
+                    action()
+                }
+            }
     }
 }
 
